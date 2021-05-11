@@ -218,9 +218,6 @@ export async function run() {
 	// fetch tags (again)
 	core.info("Fetching generated tag");
 	await exec("git fetch --tags");
-	
-	// checkout new tag
-	await exec("git checkout 'refs/tags/${newTag}'");
   } catch (error) {
     core.setFailed(error.message);
   }
