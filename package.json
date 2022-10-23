@@ -6,19 +6,18 @@
   "main": "src/main.ts",
   "scripts": {
     "build": "ncc build --source-map",
-    "test": "jest",
     "package": "ncc build --source-map"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mathieudutour/github-tag-action.git"
+    "url": "git+https://github.com/sirateek/github-tag-action.git"
   },
   "keywords": [
     "actions",
     "node",
     "setup"
   ],
-  "author": "Mathieu Dutour",
+  "author": "Siratee K.",
   "license": "MIT",
   "dependencies": {
     "@actions/exec": "^1.0.1",
