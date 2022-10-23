@@ -1,9 +1,9 @@
-import * as core from "@actions/core";
 import { exec as _exec } from "@actions/exec";
 import { context, GitHub } from "@actions/github";
 import semver, { ReleaseType } from "semver";
 import { analyzeCommits } from "./myCommitAnalyzer";
 import { generateNotes } from "@semantic-release/release-notes-generator";
+import CoreAdapter from "./core";
 
 const SEPARATOR = "==============================================";
 
@@ -19,8 +19,8 @@ async function exec(command: string, args?: string[]) {
         },
         stderr: (data: Buffer) => {
           stderr += data.toString();
-        }
-      }
+        },
+      },
     };
 
     const code = await _exec(command, args, options);
@@ -28,19 +28,20 @@ async function exec(command: string, args?: string[]) {
     return {
       code,
       stdout,
-      stderr
+      stderr,
     };
   } catch (err) {
     return {
       code: 1,
       stdout,
       stderr,
-      error: err
+      error: err,
     };
   }
 }
 
 export async function run() {
+  const core = new CoreAdapter();
   try {
     const defaultBump = core.getInput("default_bump") as ReleaseType;
     const messageParserPreset = core.getInput("message_parser_preset");
@@ -63,10 +64,12 @@ export async function run() {
 
     const preRelease = releaseBranches
       .split(",")
-      .every(branch => !GITHUB_REF.replace("refs/heads/", "").match(branch));
+      .every((branch) => !GITHUB_REF.replace("refs/heads/", "").match(branch));
 
     // if directory is shallow, unshallow it
-    const shallow = (await exec("git rev-parse --is-shallow-repository")).stdout.trim();
+    const shallow = (
+      await exec("git rev-parse --is-shallow-repository")
+    ).stdout.trim();
     if (shallow.match("true")) {
       await exec("git fetch --unshallow");
     }
@@ -79,9 +82,11 @@ export async function run() {
     let logs = "";
 
     if (hasTag) {
-      console.log(await exec('pwd'));
+      console.log(await exec("pwd"));
       const previousTagSha = (
-        await exec(`git rev-list --tags=${tagPrefix}* --topo-order --max-count=1`)
+        await exec(
+          `git rev-list --tags=${tagPrefix}* --topo-order --max-count=1`
+        )
       ).stdout.trim();
       tag = (await exec(`git describe --tags ${previousTagSha}`)).stdout.trim();
       logs = (
@@ -110,15 +115,15 @@ export async function run() {
     // for some reason the commits start with a `'` on the CI so we ignore it
     const commits = logs
       .split(SEPARATOR)
-      .map(x => ({ message: x.trim().replace(/(^['\s]+)|(['\s]+$)/g, "") }))
-      .filter(x => !!x.message);
+      .map((x) => ({ message: x.trim().replace(/(^['\s]+)|(['\s]+$)/g, "") }))
+      .filter((x) => !!x.message);
 
     core.debug(`Commits: ${commits}`);
 
-    var bump = await analyzeCommits(
-      { preset: messageParserPreset || 'conventionalcommits' },
+    var bump = (await analyzeCommits(
+      { preset: messageParserPreset || "conventionalcommits" },
       { commits, logger: { log: console.info.bind(console) } }
-    ) as ReleaseType;
+    )) as ReleaseType;
     core.debug(`Bump type from commits: ${bump}`);
 
     bump = bump || defaultBump;
@@ -130,15 +135,19 @@ export async function run() {
       return;
     }
 
-    const rawVersion = tag.replace(tagPrefix, '');
+    const rawVersion = tag.replace(tagPrefix, "");
     const incResult = semver.inc(rawVersion, bump || defaultBump);
-    core.debug(`SemVer.inc(${rawVersion}, ${bump || defaultBump}): ${incResult}`);
+    core.debug(
+      `SemVer.inc(${rawVersion}, ${bump || defaultBump}): ${incResult}`
+    );
     if (!incResult) {
       core.setFailed(`SemVer inc rejected tag ${tag}`);
       return;
     }
 
-    const newVersion = `${incResult}${preRelease ? `-${GITHUB_SHA.slice(0, 7)}` : ""}`;
+    const newVersion = `${incResult}${
+      preRelease ? `-${GITHUB_SHA.slice(0, 7)}` : ""
+    }`;
     const newTag = `${tagPrefix}${newVersion}`;
 
     core.setOutput("new_version", newVersion);
@@ -152,10 +161,10 @@ export async function run() {
         commits,
         logger: { log: console.info.bind(console) },
         options: {
-          repositoryUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}`
+          repositoryUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}`,
         },
         lastRelease: { gitTag: tag },
-        nextRelease: { gitTag: newTag, version: newVersion }
+        nextRelease: { gitTag: newTag, version: newVersion },
       }
     );
 
@@ -177,7 +186,7 @@ export async function run() {
       return;
     }
 
-    core.info("dry_run: " + dryRun + " (" + typeof (dryRun) + ")");
+    core.info("dry_run: " + dryRun + " (" + typeof dryRun + ")");
     if (dryRun === "true") {
       core.setOutput("dry_run", "true");
       core.info("Dry run: not performing tag action.");
@@ -194,7 +203,7 @@ export async function run() {
         tag: newTag,
         message: newTag,
         object: GITHUB_SHA,
-        type: "commit"
+        type: "commit",
       });
 
       core.debug(`Pushing annotated tag to the repo`);
@@ -202,7 +211,7 @@ export async function run() {
       await octokit.git.createRef({
         ...context.repo,
         ref: `refs/tags/${newTag}`,
-        sha: tagCreateResponse.data.sha
+        sha: tagCreateResponse.data.sha,
       });
       return;
     }
@@ -212,13 +221,13 @@ export async function run() {
     await octokit.git.createRef({
       ...context.repo,
       ref: `refs/tags/${newTag}`,
-      sha: GITHUB_SHA
+      sha: GITHUB_SHA,
     });
 
-	// fetch tags (again)
-	core.info("Fetching generated tag");
-	await exec("git fetch --tags");
+    // fetch tags (again)
+    core.info("Fetching generated tag");
+    await exec("git fetch --tags");
   } catch (error) {
-    core.setFailed(error.message);
+    core.setFailed((error as any).message);
   }
 }
